@@ -1,5 +1,10 @@
 package instructionset
 
+import (
+	constantpool "github.com/vkeslarek/toy-jvm/class-file/constant-pool"
+	"github.com/vkeslarek/toy-jvm/class-file/reader"
+)
+
 type OpcodeName string
 
 const (
@@ -209,25 +214,6 @@ const (
 
 type OpcodeTable map[uint8]OpcodeName
 
-type Opcode struct {
-	Name             OpcodeName
-	Value            uint8
-	Operands         []OperandName
-	StackOperandsIn  []OperandName
-	StackOperandsOut []OperandName
-}
-
-var (
-	AALoadOpcode     = Opcode{Value: 0x32, Name: aaloadOpcodeName, StackOperandsIn: []OperandName{OperandNameArrayRef, OperandNameIndex}, StackOperandsOut: []OperandName{OperandNameObjectReference}}
-	AAStoreOpcode    = Opcode{Value: 0x53, Name: aastoreOpcodeName, StackOperandsIn: []OperandName{OperandNameArrayRef, OperandNameIndex, OperandNameObjectReference}}
-	AConstNullOpcode = Opcode{Value: 0x01, Name: aconst_nullOpcodeName, StackOperandsOut: []OperandName{OperandNameObjectReference}}
-	ALoadOpcode      = Opcode{Value: 0x19, Name: aloadOpcodeName, Operands: []OperandName{OperandNameIndex}, StackOperandsOut: []OperandName{OperandNameObjectReference}}
-	ALoad0Opcode     = Opcode{Value: 0x2A, Name: aload_0OpcodeName, StackOperandsOut: []OperandName{OperandNameObjectReference}}
-	ALoad1Opcode     = Opcode{Value: 0x2B, Name: aload_1OpcodeName, StackOperandsOut: []OperandName{OperandNameObjectReference}}
-	ALoad2Opcode     = Opcode{Value: 0x2C, Name: aload_2OpcodeName, StackOperandsOut: []OperandName{OperandNameObjectReference}}
-	ALoad3Opcode     = Opcode{Value: 0x2D, Name: aload_3OpcodeName, StackOperandsOut: []OperandName{OperandNameObjectReference}}
-)
-
 var opcodeTable = OpcodeTable{
 	0x32: aaloadOpcodeName,
 	0x53: aastoreOpcodeName,
@@ -431,4 +417,73 @@ var opcodeTable = OpcodeTable{
 	0x5F: swapOpcodeName,
 	0xAA: tableswitchOpcodeName,
 	0xC4: wideOpcodeName,
+}
+
+type OpcodeParser interface {
+	Parse(fieldName string, reader *reader.CodeReader, opcodeValue uint8, opcodeName OpcodeName, cp *constantpool.ConstantPool) Opcode
+}
+
+type OpcodeParserTable (map[OpcodeName]OpcodeParser)
+
+var arithmeticOpcodeParser = ArithmeticOpcodeParser{}
+var arrayLengthOpcodeParser = ArrayLengthOpcodeParser{}
+var compareOpcodeParser = CompareOpcodeParser{}
+
+var opcodeParserTable = OpcodeParserTable{
+	// ARITHMETIC OPCODES
+	daddOpcodeName: &arithmeticOpcodeParser,
+	faddOpcodeName: &arithmeticOpcodeParser,
+	iaddOpcodeName: &arithmeticOpcodeParser,
+	laddOpcodeName: &arithmeticOpcodeParser,
+	ddivOpcodeName: &arithmeticOpcodeParser,
+	fdivOpcodeName: &arithmeticOpcodeParser,
+	idivOpcodeName: &arithmeticOpcodeParser,
+	ldivOpcodeName: &arithmeticOpcodeParser,
+	iincOpcodeName: &arithmeticOpcodeParser,
+	dmulOpcodeName: &arithmeticOpcodeParser,
+	fmulOpcodeName: &arithmeticOpcodeParser,
+	imulOpcodeName: &arithmeticOpcodeParser,
+	lmulOpcodeName: &arithmeticOpcodeParser,
+	dsubOpcodeName: &arithmeticOpcodeParser,
+	fsubOpcodeName: &arithmeticOpcodeParser,
+	isubOpcodeName: &arithmeticOpcodeParser,
+	lsubOpcodeName: &arithmeticOpcodeParser,
+	dnegOpcodeName: &arithmeticOpcodeParser,
+	fnegOpcodeName: &arithmeticOpcodeParser,
+	inegOpcodeName: &arithmeticOpcodeParser,
+	lnegOpcodeName: &arithmeticOpcodeParser,
+	dremOpcodeName: &arithmeticOpcodeParser,
+	fremOpcodeName: &arithmeticOpcodeParser,
+	iremOpcodeName: &arithmeticOpcodeParser,
+	lremOpcodeName: &arithmeticOpcodeParser,
+	// ARRAY LENGTH
+	arraylengthOpcodeName: &arrayLengthOpcodeParser,
+	// COMPARE OPCODES
+	dcmplOpcodeName: &compareOpcodeParser,
+	dcmpgOpcodeName: &compareOpcodeParser,
+	fcmplOpcodeName: &compareOpcodeParser,
+	fcmpgOpcodeName: &compareOpcodeParser,
+	lcmpOpcodeName:  &compareOpcodeParser,
+	// TODO: other OPCODES
+}
+
+type Opcode interface {
+	Value() uint8
+	Name() OpcodeName
+	Operands() []uint8
+}
+
+func ParseOpcode(fieldName string, reader *reader.CodeReader, cp *constantpool.ConstantPool) Opcode {
+	opcodeValue := reader.ReadUint8(fieldName)
+	opcodeName, ok := opcodeTable[opcodeValue]
+	if !ok {
+		return nil
+	}
+
+	parser, ok := opcodeParserTable[opcodeName]
+	if !ok {
+		return nil
+	}
+
+	return parser.Parse(fieldName, reader, opcodeValue, opcodeName, cp)
 }
